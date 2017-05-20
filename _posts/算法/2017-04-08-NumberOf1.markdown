@@ -1,0 +1,51 @@
+---
+layout: post
+title:  "NumberOf1(位运算)"
+categories: 算法
+---
+
+求出1~13的整数中1出现的次数,并算出100~1300的整数中1出现的次数？为此他特别数了一下1~13中包含1的数字有1、10、11、12、13因此共出现6次,但是对于后面问题他就没辙了。ACMer希望你们帮帮他,并把问题更加普遍化,可以很快的求出任意非负整数区间中1出现的次数。  
+**思路**：  
+采用朴素的方法时间复杂度过高，考虑更优的算法。  
+举例子  
+1~210区间中出现1的个数 = 个位上出现1的个数 + 十位上出现1的个数 + 百位上出现1的个数  
+对应的f(210) = count((0~21)1) + count((0~1)1(0~9), 21(0~0)) + count (1(00~99))  
+总结： 令cur表示当前位，high表示高位，low表示低位。
+从右数第i位出现1的个数count(i)分为3种
+<ol>
+<li>cur=0时，count(i) = high\*10^(i-1)</li>
+<li>cur=1时，count(i) = high\*10^(i-1) + low + 1</li>
+<li>cur>1时，count(i) = (high+1)\*10^(i-1)</li>
+</ol>
+
+{% highlight java linenos %}
+
+public class Solution {
+    
+    public int NumberOf1Between1AndN_Solution(int n){
+        int m = n;
+        int iFactor = 1;
+        int high, low, cur;
+        int count = 0;
+        while(m != 0){
+            low = n % iFactor;
+            cur = m % 10;
+            high = m / 10;
+            m = m / 10;
+            if(cur == 0)
+                count += high * iFactor;
+            else if(cur == 1)
+                count += high * iFactor + low + 1;
+            else
+                count += (high + 1) * iFactor;
+            
+            iFactor *= 10;
+        }
+        return count;
+    }
+}
+
+{% endhighlight %}
+
+该算法的时间复杂度为O(lgN)。
+

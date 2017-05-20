@@ -1,0 +1,79 @@
+---
+layout: post
+title:  "Reverse Linked List II -- leetcode092"
+categories: 算法
+---
+Reverse a linked list from position m to n. Do it in-place and in one-pass.
+For example:
+
+Given 1->2->3->4->5->NULL, m = 2 and n = 4,
+
+return 1->4->3->2->5->NULL.
+
+Note:
+Given m, n satisfy the following condition:  
+1 ≤ m ≤ n ≤ length of list.
+
+
+表示我一开始看错了题目，以为只用交换第m个和第n个元素，所用只用两个指针找到了m和n的位置。用的思想类似于寻找链表中倒数第k个元素 。看清题目是reverse逆置[m,n]区间里的元素，所以又加了一层循环。时间复杂度:O(n^2),Runtime: 76ms。代码如下：
+
+{% highlight python linenos%}
+class ListNode(object):
+    def __init__(self, x):
+        self.val = x
+        self.next = None
+
+class Solution(object):
+    def reverseBetween(self, head, m, n):
+        """
+        :type head: ListNode
+        :type m: int
+        :type n: int
+        :rtype: ListNode
+        """
+        while n >= m:
+            diff = n - m
+            p1 = p2 = head
+            pos1 = pos2 = 1
+            while p1:
+                if pos1 == n:
+                    break
+                if pos1 > diff:
+                    p2 = p2.next
+                    pos2 += 1
+                p1 = p1.next
+                pos1 += 1
+            temp = p1.val
+            p1.val = p2.val
+            p2.val = temp
+            m += 1
+            n -= 1
+        return head
+{% endhighlight %}
+
+由于不是数组，是链表，可以通过改变[m,n]之间指针的方向来达到目的。for i in range(m, n),把第i个节点插到第m个，类似于头插法。时间复杂度：O(n), Runtime: 42ms。代码如下：
+{% highlight python linenos%}
+class Solution(object):
+    def reverseBetween(self, head, m, n):
+        """
+        :type head: ListNode
+        :type m: int
+        :type n: int
+        :rtype: ListNode
+        """
+        if m == n:
+            return head
+        dummy = ListNode(0)
+        dummy.next = head
+        p = dummy
+        for i in range(1, m):
+            p = p.next
+        front = p
+        pre = front.next
+        for i in range(m, n):
+            first = front.next
+            front.next = pre.next
+            pre.next = pre.next.next
+            front.next.next = first
+        return dummy.next
+{% endhighlight %}
