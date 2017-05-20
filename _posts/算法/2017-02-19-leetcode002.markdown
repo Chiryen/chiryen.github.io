@@ -43,8 +43,6 @@ Output: 7 -> 0 -> 8
 代码是参照网上的大神写的，其中第24行的p.next = p = ListNode(value)，一开始表示很奇怪，stackoverflow上有人说python的这种赋值顺序和大多数语言不一样  
 p.next = ListNode(value), 然后p指向相同的地址
 
-{% highlight python %}
-temporary_expr_result = ListNode(value)
-a = temporary_expr_result
-b = temporary_expr_result
-{% endhighlight %}
+	temporary_expr_result = ListNode(value)
+	a = temporary_expr_result
+	b = temporary_expr_result
