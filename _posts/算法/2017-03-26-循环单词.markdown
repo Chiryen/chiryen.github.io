@@ -24,48 +24,46 @@ ordw
 2
 
 **思路**：利用HashMap作为数据结构，用当前字符串与HashMap中的key(字符串)进行匹配，若匹配成功则其value加1，否则加入新的字符串，并令value=1。
-
-{% highlight java linenos %}
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Scanner;
-public class Main {
-	public static void main(String[] args) {
-		// TODO Auto-generated method stub
-		Scanner sc = new Scanner(System.in);
-		int t = sc.nextInt();
-		HashMap<String, Integer> map = new HashMap<String, Integer>();
-		while(t-- != 0){
-			String str = sc.next();
-			if (map.isEmpty()){
-				map.put(str, 1);
-			}else{
-				boolean match = false;
-				for (Map.Entry<String, Integer> entry : map.entrySet()){
-					if (compare(entry.getKey(), str)){
-						map.put(entry.getKey(), entry.getValue() + 1);
-						match = true;
-						break;
-					}
-				}
-				if(!match)
-					map.put(str, 1);
-			}
-		}
-		System.out.println(map.size());
-	}
 	
-	public static boolean compare(String src, String target){
-		if (src.length() != target.length())
-			return false;
-		src = src + src;
-		if (src.contains(target))
-			return true;
-		else
-			return false;
+	import java.util.HashMap;
+	import java.util.Map;
+	import java.util.Scanner;
+	public class Main {
+		public static void main(String[] args) {
+			// TODO Auto-generated method stub
+			Scanner sc = new Scanner(System.in);
+			int t = sc.nextInt();
+			HashMap<String, Integer> map = new HashMap<String, Integer>();
+			while(t-- != 0){
+				String str = sc.next();
+				if (map.isEmpty()){
+					map.put(str, 1);
+				}else{
+					boolean match = false;
+					for (Map.Entry<String, Integer> entry : map.entrySet()){
+						if (compare(entry.getKey(), str)){
+							map.put(entry.getKey(), entry.getValue() + 1);
+							match = true;
+							break;
+						}
+					}
+					if(!match)
+						map.put(str, 1);
+				}
+			}
+			System.out.println(map.size());
+		}
+		
+		public static boolean compare(String src, String target){
+			if (src.length() != target.length())
+				return false;
+			src = src + src;
+			if (src.contains(target))
+				return true;
+			else
+				return false;
+		}
 	}
-}
 
-{% endhighlight %}
 
 第一次提交运行出现错误，原因是我的匹配过程是采取的将源字符串重复一次，即src = src + src,然后判断target是否为新src的子串。<font color='red'>这样会导致一个bug,若src = "aa", target = "a",</font>同样会匹配成功，但这不符合题意。**所以在判断之前需要判断两个字符串长度是否相等。**
