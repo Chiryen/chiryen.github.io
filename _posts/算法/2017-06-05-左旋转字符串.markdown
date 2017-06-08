@@ -1,0 +1,39 @@
+---
+layout: post
+title:  "左旋转字符串"
+date:   2017-06-05 8:49:11 +0800
+categories: jekyll
+---
+#### 题目描述
+汇编语言中有一种移位指令叫做循环左移（ROL），现在有个简单的任务，就是用字符串模拟这个指令的运算结果。对于一个给定的字符序列S，请你把其循环左移K位后的序列输出。例如，字符序列S=”abcXYZdef”,要求输出循环左移3位后的结果，即“XYZdefabc”。是不是很简单？OK，搞定它！  
+#### 解析
+题目看上去很简单，很容易写出代码：
+
+	public class Solution {
+	    public String LeftRotateString(String str,int n) {
+	        String s1 = str.substring(0, n);
+	        String s2 = str.substring(n);
+	        return s2 + s1;
+	    }
+	}
+
+但这样写并不正确，没有考虑n的范围，如果n<0或n>str.length(),就会出现异常。  
+1）n>str.length()时，假设str.length()==5, n==8, 在经过前5次左移后字符串变成了原来的样子，然后再左移3次。所以最终是左移了n % str.length()次。  
+2）n<0时，对应的应该是右移-n次，假设str.length()==5, n==-3, 右移3次的结果和左移2次的结果相同。依次类推，左移((n % str.length()) + str.length()) % str.length()次。  
+3）0<n<str.length()时，就是上述代码的处理方式。  
+以上三种情况都可以转化为左移((n % str.length()) + str.length()) % str.length()次，同时str.length()!=0。  
+完善代码  
+	
+	public class Solution {
+		public String LeftRotateString(String str,int n) {
+	        if(str.length() == 0)
+	            return "";
+	        n = (n % str.length() + str.length()) % str.length();
+	        String s1 = str.substring(0, n);
+	        String s2 = str.substring(n);
+	        return s2 + s1;
+	    }
+	}
+
+#### 总结
+<font color="red">越是简单的题目，越需要小心，寻找题目中的不确定因素的所有情况，做好异常处理。</font>
