@@ -1,0 +1,206 @@
+---
+layout: post
+title:  "背包问题"
+categories: 算法
+---
+## [Bone Collector](http://acm.hdu.edu.cn/showproblem.php?pid=2602)
+### Problem Description 
+Many years ago , in Teddy’s hometown there was a man who was called “Bone Collector”. This man like to collect varies of bones , such as dog’s , cow’s , also he went to the grave …
+The bone collector had a big bag with a volume of V ,and along his trip of collecting there are a lot of bones , obviously , different bone has different value and different volume, now given the each bone’s value along his trip , can you calculate out the maximum of the total value the bone collector can get ?
+
+### Input 
+The first line contain a integer T , the number of cases.
+Followed by T cases , each case three lines , the first line contain two integer N , V, (N <= 1000 , V <= 1000 )representing the number of bones and the volume of his bag. And the second line contain N integers representing the value of each bone. The third line contain N integers representing the volume of each bone.
+### Output 
+One integer per line representing the maximum of the total value (this number will be less than 231).
+
+### Sample Input
+1  
+5 10  
+1 2 3 4 5  
+5 4 3 2 1  
+### Sample Output
+14
+
+
+使用暴力搜索，从前往后把每个骨头取或者不取的情况全部找出来。n个骨头，时间复杂度就为O(2^n); 
+	
+	import java.util.Scanner;
+	public class Main {
+	
+		private static int[] value = new int[1005];
+		private static int[] weight = new int[1005];
+		private static int n;
+		private static int[][] dp = new int[1005][1005];
+		
+		//从第i个骨头开始，把后面的骨头装入容量等于j的背包
+		public static int dfs(int i, int j) {
+			int res;
+			if(i == n + 1)
+				res = 0;
+			else if(j < weight[i])	//背包容量小于第i个骨头的weight时，不装
+				res = dfs(i+1, j);
+			else
+				res = Math.max(dfs(i+1, j), dfs(i+1, j-weight[i]) + value[i]);	//第i个骨头装或不装
+			return res;
+		}
+		
+		public static void main(String[] args) {
+			// TODO Auto-generated method stub
+			Scanner sc = new Scanner(System.in);
+			int t = sc.nextInt();
+			while(t-- != 0) {
+				n = sc.nextInt();
+				int v = sc.nextInt();		
+				for(int i = 1; i <= n; i++)
+					value[i] = sc.nextInt();
+				for(int i = 1; i <= n; i++)
+					weight[i] = sc.nextInt();
+				for(int i = 0; i < 1005; i++)
+					for(int j = 0; j < 1005; j++)
+						dp[i][j] = -1;
+				
+				int res = dfs(1, v);
+				System.out.println(res);
+			}
+		}
+	}
+
+O(2^n)显然不是一个好的情况，耗时的主要原因是中间存在大量的重复计算。使用记忆化搜索，把找到的中间结果保存下来，可以避免重复计算。如下代码可以AC。
+
+	public static int dfs(int i, int j) {
+		if(dp[i][j] >= 0)
+			return dp[i][j];
+		int res;
+		if(i == n+1)
+			res = 0;
+		else if(j < weight[i])
+			res = dfs(i+1, j);
+		else
+			res = Math.max(dfs(i+1, j), dfs(i+1, j-weight[i]) + value[i]);
+		dp[i][j] = res;		//记忆化搜索，将找到的中间结果保存下来
+		return res;
+	}
+
+这类组合优化问题最常见的解法是使用动态规划。相比记忆化搜索，动态规划是采用的是迭代法。记忆化搜索是用一个map数组把搜索过程中的每一个结果保存下来，不用考虑计算的先后顺序；而动态规划非常注重**计算顺序**（一般是逆向思维）。
+
+### 动态规划算法设计要素 
+<ul>
+<li>多阶段决策过程，每步处理一个子问题，界定子问题的边界</li>
+<li>列出优化函数的递推方程及初值</li>
+<li>问题要满足优化原则或最优子结构性质，即：一个最优决策序列的任何子序列本身一定是相对子序列的初始和结束状态的最优决策序列</li>
+</ul>
+如果判断某个问题满足动态规划的原则，那问题的难点就在如何得到递推方程，即问题与子问题的依赖关系。 
+
+---
+
+### 01背包问题 
+这是最基础的背包问题，特点是：每种物品仅有一件，可以选择放或不放。  
+用子问题定义状态：即f[i][v]表示前i件物品恰放入一个容量为v的背包可以获得的最大价值。则其状态转移方程便是：
+
+**f[i][v]=max{f[i-1][v],f[i-1][v-c[i]]+w[i]}**
+
+这个方程非常重要，基本上所有跟背包相关的问题的方程都是由它衍生出来的。所以有必要将它详细解释一下：“将前i件物品放入容量为v的背包中”这个子问题，若只考虑第i件物品的策略（放或不放），那么就可以转化为一个只牵扯前i-1件物品的问题。如果不放第i件物品，那么问题就转化为“前i-1件物 品放入容量为v的背包中”，价值为f[i-1][v]；如果放第i件物品，那么问题就转化为“前i-1件物品放入剩下的容量为v-c[i]的背包中”，此时能获得的最大价值就是f[i-1][v-c[i]]再加上通过放入第i件物品获得的价值w[i]。
+
+	import java.util.Scanner;
+	public class Main {
+	
+	    public static void main(String[] args) {
+	        // TODO Auto-generated method stub
+	        Scanner in = new Scanner(System.in);
+	        int t = in.nextInt();
+	        while(t-- != 0){
+	            int n = in.nextInt();
+	            int v = in.nextInt();
+	            int[] value = new int[n+1];
+	            int[] weight = new int[n+1];
+	            for(int i=1;i<=n;i++)
+	                value[i] = in.nextInt();
+	            for(int i=1;i<=n;i++)
+	                weight[i] = in.nextInt();
+	        
+	            int[][] dp = new int[n+1][v+1];
+	            for(int j=0;j<=v;j++)
+	                dp[0][j] = 0;
+	            for(int i=1;i<=n;i++){
+	                for(int j=0;j<=v;j++){
+	                    if(j>=weight[i]){
+	                        dp[i][j] = Math.max(dp[i-1][j], dp[i-1][j-weight[i]]+value[i]);
+	                    }
+	                    else
+	                        dp[i][j] = dp[i-1][j];
+	                }
+	            }
+	            System.out.println(dp[n][v]);
+	        }
+	    }
+	}
+
+值得注意的是动态规划代码中的*dp[i][j] = Math.max(dp[i-1][j], dp[i-1][j-weight[i]]+value[i]);*与暴力搜索中的*res = Math.max(dfs(i+1, j), dfs(i+1, j-weight[i]) + value[i]);*非常相似。说明动态规划的递推公式可以暴力搜索的思路演化而来。
+
+#### 优化空间
+以上是采用二维数组的方法，观察dp[][]，发现第i行是由第i-1行推导出来，与0~i-2行没有关系。可以使用一维数组解决背包问题。事实上，<font color="red">这要求在每次主循环中我们以v=V..0的顺序推f[v]</font>，这样才能保证推f[v]时f[v-c[i]]保存的是状态 f[i-1][v-c[i]]的值。伪代码如下：
+
+	for i=1..N
+	    for v=V..c[i]
+	        f[v]=max{f[v],f[v-c[i]]+w[i]};
+
+以v=V..0的顺序推f[v]时，f[0...v-1]就相当于f[i-1][0...v-1]。如果将v的循环顺序从上面的逆序改成顺序的话，那么则成了f[i][v]由f[i][v-c[i]]推知，与本题意不符，但它却是另一个重要的背包问题**完全背包**的最简捷的解决方案。 
+一维数组的AC代码：
+
+	import java.util.Scanner;
+	public class Main {
+	
+	    public static void main(String[] args) {
+	        // TODO Auto-generated method stub
+	        Scanner in = new Scanner(System.in);
+	        int t = in.nextInt();
+	        while(t-- != 0){
+	            int n = in.nextInt();
+	            int v = in.nextInt();
+	            int[] value = new int[n+1];
+	            int[] weight = new int[n+1];
+	            for(int i=1;i<=n;i++)
+	                value[i] = in.nextInt();
+	            for(int i=1;i<=n;i++)
+	                weight[i] = in.nextInt();
+	        
+	            int[] dp = new int[v+1];
+	            for(int i=1; i<=n; i++){
+	                for(int j=v; j>=weight[i]; j--){
+	                    dp[j] = Math.max(dp[j], dp[j-weight[i]] + value[i]);
+	                }
+	            }
+	            System.out.println(dp[v]);
+	        }
+	    }
+	}
+
+***
+### 完全背包
+相比01背包，完全背包中没见物品有无限件。状态转移方程为：  
+**f[i][v]=max{f[i-1][v-k\*c[i]]+k\*w[i]|0<=k\*c[i]<=v}**  
+#### 时间复杂度优化
+设f[i][j]表示在前i种物品中选取若干件物品放入容量为j的背包中的最大价值。对第i中物品如果不放，则f[i][j] = f[i-1][j]; 如果放，背包中应该出现至少一件第i种物品，即f[i][j]=f[i][j-c[i]]+w[i]。为什么会是f[i][j-c[i]]+w[i]？因为f[i][j-c[i]]里面可能有第i种物品，也可能没有第i种物品。我们要确保f[i][j]至少有一件第i件物品，所以要预留C[i]的空间来存放一件第i种物品。
+状态转移方程：  
+**f[i][j]=max{f[i-1][j], f[i][j-c[i]]+w[i]}**  
+伪代码：  
+
+	for i=1..N
+	    for j=0..V
+	        f[i][j] = f[i-1][j]
+	        if(j >= c[i])
+	            then f[i][j] = max(f[i][j],f[i][j-c[i]]+w[i])
+
+#### 空间优化
+空间优化原理与01背包的相同，v的遍历顺序相反
+	
+	for i=1..N
+	    for v=c[i]..V
+	        f[v]=max{f[v],f[v-c[i]]+w[i]}
+
+***
+### 多重背包
+有N种物品和一个容量为V的背包。第i种物品最多有n[i]件可用，每件费用是c[i]，价值是w[i]。  
+状态转移方程：  
+**f[i][v]=max{f[i-1][v-k\*c[i]]+k\*w[i]|0<=k<=n[i]}**
