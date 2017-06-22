@@ -1,0 +1,185 @@
+---
+layout: post
+title:  "Java实现简单数据库连接池"
+date:   2017-06-22 9:28:21 +0800
+categories: Java
+---
+
+一般来说，池的概念是为了做缓冲，假设某个人需要经常使用一种资源，而每次获得这种资源需要比较大的开销，所以就把资源放在池中，每次使用的时候只需要从池中获取，全部使用完后一次性释放。  
+先上代码  
+ConnectionPool.java:  
+
+	import java.sql.Connection;
+	import java.util.LinkedList;
+	
+	public class ConnectionPool {
+		private LinkedList<Connection> pool = new LinkedList<Connection>();
+		public ConnectionPool(int initialSize) {
+			if (initialSize > 0) {
+				for (int i = 0; i < initialSize; i++) {
+					pool.addLast(ConnectionDriver.createConnection());
+				}
+			}
+		}
+		
+		public void releaseConnection(Connection connection) {
+			if (connection != null) {
+				synchronized (pool) {
+					pool.addLast(connection);
+					pool.notifyAll();
+				}
+			}
+		}
+		
+		public Connection fetchConnection(long mills) throws InterruptedException {
+			synchronized (pool) {
+				if (mills <= 0) {
+					while (pool.isEmpty()) {
+						pool.wait();
+					}
+					return pool.removeFirst();
+				} else {	// 等待超时模式
+					long future = System.currentTimeMillis() + mills;
+					long remaining = mills;
+					while (pool.isEmpty() && remaining > 0) {
+						pool.wait(remaining);
+						remaining = future - System.currentTimeMillis();
+					}
+				}
+				Connection result = null;
+				if (!pool.isEmpty()) {
+					result = pool.removeFirst();
+				}
+				return result;
+			}
+		}
+	}
+
+
+ConnectionDriver.java
+
+	import java.lang.reflect.InvocationHandler;
+	import java.lang.reflect.Method;
+	import java.lang.reflect.Proxy;
+	import java.sql.Connection;
+	import java.util.concurrent.TimeUnit;
+	
+	public class ConnectionDriver {
+		static class ConnectionHandler implements InvocationHandler {
+	
+			public Object invoke(Object proxy, Method method, Object[] args)
+					throws Throwable {
+				// TODO Auto-generated method stub
+				if (method.getName().equals("commit")) {
+					TimeUnit.MILLISECONDS.sleep(100);
+				}
+				return null;
+			}
+		}
+			
+		public static final Connection createConnection() {
+			return (Connection)Proxy.newProxyInstance(ConnectionDriver.class.getClassLoader(), 
+					new Class<?>[] {Connection.class}, 
+					new ConnectionHandler());
+		}
+	}
+
+
+ConnectionPoolTest.java
+
+	import java.sql.Connection;
+	import java.util.concurrent.CountDownLatch;
+	import java.util.concurrent.atomic.AtomicInteger;
+	
+	public class ConnectionPoolTest {
+	
+		static ConnectionPool pool = new ConnectionPool(10);
+		static CountDownLatch start = new CountDownLatch(1); // 保证所有ConnectionRunner 能够同时开始
+		static CountDownLatch end; // main线程将会等待所有ConnectionRunner结束后才能继续执行
+		
+		public static void main(String[] args) throws InterruptedException {
+			// TODO Auto-generated method stub
+			int threadCount = 10;
+			end = new CountDownLatch(threadCount);
+			int count = 20;
+			AtomicInteger got = new AtomicInteger();
+			AtomicInteger notGot = new AtomicInteger();
+			for (int i = 0; i < threadCount; i++) {
+				Thread thread = new Thread(new ConnectionRunner(count, got, notGot), "ConnectionRunnerThread");
+				thread.start();
+			}
+			start.countDown();
+			end.await();
+			System.out.println("total invoke: " + (threadCount * count));
+			System.out.println("got connection: " + got);
+			System.out.println("not got connection " + notGot);
+		}
+		
+		static class ConnectionRunner implements Runnable {
+			int count;
+			AtomicInteger got;
+			AtomicInteger notGot;
+			public ConnectionRunner(int count, AtomicInteger got, AtomicInteger notGot) {
+				this.count = count;
+				this.got = got;
+				this.notGot = notGot;
+			}
+			public void run() {
+				try {
+					start.await();
+				} catch (Exception ex) {
+				}
+				
+				while (count > 0) {
+					try {
+						Connection connection = pool.fetchConnection(1000);
+						if (connection != null) {
+							try {
+								connection.createStatement();
+								connection.commit();
+							} finally {
+								pool.releaseConnection(connection);
+								got.incrementAndGet();
+							}
+						} else {
+							notGot.incrementAndGet();
+						}
+					} catch (Exception ex) {
+					} finally {
+						count --;
+					}
+				}
+				end.countDown();
+			}
+		}
+	}
+
+以上代码来自《Java并发编程的艺术》，先从ConnectionPool类开始分析，在构造方法中先一次性创建指定数量的数据库连接，这个类主要包含两个功能：获取连接和释放连接。但是，获取连接是从连接池（这里采用队列实现）中取出一条连接，释放连接是把一条连接放到池中。因为连接池属于共享资源，所以对连接池的操作都必须加锁。  
+其中获取连接采用了等待超时模式，假如一个线程threadA正在调用fetchConnection(1000),此时连接池为空，线程将被挂起。如果在1000毫米内，有一个线程threadB调用了releaseConnection(),有一个连接被丢回池中，执行pool.notifyAll，threadA中的pool.wait()将返回， 最后从pool中取出一个连接。如果threadA等了1000毫秒，池里仍然没有可用连接，fetchConnnection()返回null。  
+
+#### 动态代理
+这个示例并没有采用真正的数据库驱动实现java.sql.Connection这个接口，而是通过动态代理构造一个Connnection。  
+**动态代理**是利用Java的反射技术(Java Reflection)，在运行时创建一个实现某些给定接口的新类（也称“动态代理类”）及其实例。  
+ 
+java.lang.reflect.Proxy.newProxyInstance()创建代理对象，返回的结果是实现了interfaces[]中接口的类的对象。
+
+	public static Object newProxyInstance(ClassLoader loader,
+	                                      Class<?>[] interfaces,
+	                                      InvocationHandler h)
+	                               throws IllegalArgumentException	
+
+>**Parameters:**  
+>loader - the class loader to define the proxy class  
+>interfaces - the list of interfaces for the proxy class to implement  
+>h - the invocation handler to dispatch method invocations to  
+
+第3个参数h是指每个动态代理类的方法调用都会给h.invoke()处理，示例代码中的connection.createStatement(); connection.commit(); 都调用了h.invoke()。  
+
+**动态代理的使用场景：**  
+解决特定问题：一个接口的实现在编译时无法知道，需要在运行时才能实现  
+实现某些设计模式：适配器(Adapter)或装饰器(Decorator)  
+面向切面编程：如AOP in Spring  
+
+#### CountDownLatch
+示例代码中为了实现所有线程同时争抢连接池，使用CountDownLatch, CountDownLatch也是一种锁，每个线程的run()最开始执行start.await()，开始等待。所有的线程都启动完成后执行start.countDown(),计数减1达到0，start.await()返回，所有等待的线程被唤醒。  
+CountDownLatch详情见[《什么时候使用CountDownLatch？》](http://www.importnew.com/15731.html)
