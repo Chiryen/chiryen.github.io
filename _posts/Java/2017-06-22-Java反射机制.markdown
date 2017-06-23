@@ -1,0 +1,67 @@
+---
+layout: post
+title:  "Java反射机制"
+date:   2017-06-22 16:05:53 +0800
+categories: Java
+---
+
+在说Java反射机制之前先说说Java的类加载器及动态加载机制。  
+JVM先找到拥有main()方法的类，将它的.class文件加载到内存中开始执行，执行过程中会需要其他的类，当需要某个类的时候，类加载器才把它的.class文件加载到内存。  
+
+### JDK内置ClassLoader
+
+**BootStrap ClassLoader**：称为启动类加载器，通过本地方法实现，是Java类加载层次中最顶层的类加载器，负责加载JDK中的核心类库。  
+**Extension ClassLoader**：称为扩展类加载器，负责加载Java的扩展类库，默认加载JAVA_HOME/jre/lib/ext/下的所有jar。  
+**Application ClassLoader**：称为系统类加载器，负责加载自定义的.class文件，ClassLoader.getSystemClassLoader()返回的就是Applicantion ClassLoader。  
+Extension ClassLoader和Application ClassLoader是通过BootStrap ClassLoader加载到内存。
+
+### Class 类
+在java.lang.*中除了ClassLoader类，还有Class类，Class类是什么东西？  
+在Java的世界中一切皆为对象，那么正在运行的Java程序中的类和接口也是一种对象，这些对象就是Class类的实例。有点绕...举个例子，对于某个类XXX, XXX中拥有一个class对象，那么XXX.class就是java.lang.Class的一个实例。可以通过打印XXX.class.getClass().getName()来证实。  
+
+|           主要方法            |    描述   |
+|:----------------------------:|:---------:|
+| forName(String className)    | Returns the Class object associated with the class or interface with the given string name. |
+| getConstructor(Class<?>... parameterTypes) | Returns a Constructor object that reflects the specified public constructor of the class represented by this Class object.  |
+| getMethod(String name, Class<?>... parameterTypes) | Returns a Method object that reflects the specified public member method of the class or interface represented by this Class object. |
+| getField(String name) | Returns a Field object that reflects the specified public member field of the class or interface represented by this Class object. |
+| getName()  | Returns the name of the entity (class, interface, array class, primitive type, or void) represented by this Class object, as a String. |
+
+测试代码：
+
+	class MyClass {
+	    public int count;
+	    public MyClass(int start) {
+	        count = start;
+	    }
+	    public void increase(int step) {
+	        count = count + step;
+	    }
+	} 
+	
+	public class ReflectionTest {
+	
+		public static void main(String[] args) {
+			// TODO Auto-generated method stub
+			MyClass myClass = new MyClass(0); //一般做法
+			myClass.increase(2);
+			System.out.println("Normal -> " + myClass.count);
+			try {
+			    Constructor constructor = MyClass.class.getConstructor(int.class); // 获取构造方法
+			    MyClass myClassReflect = (MyClass)constructor.newInstance(10); // 创建对象
+			    Method method = MyClass.class.getMethod("increase", int.class);  // 获取方法
+			    method.invoke(myClassReflect, 5); // 调用方法
+			    Field field = MyClass.class.getField("count"); // 获取域
+			    System.out.println("Reflect -> " + field.getInt(myClassReflect)); // 获取域的值
+			} catch (Exception e) { 
+			    e.printStackTrace();
+			} 
+		}
+	}
+
+测试结果：  
+Normal -> 2  
+Reflect -> 15  
+
+### 反射的使用场景
+许多Java框架中，在配置文件中修改类或接口名称，决定加载哪一个类。尽量少的去修改代码。
