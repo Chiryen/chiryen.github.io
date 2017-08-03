@@ -12,6 +12,7 @@ categories: Java
 * [2.Java并发机制的底层实现原理](#2) 
 * [3.Java内存模型](#3) 
 * [4.Java并发编程基础](#4)
+* [5.Java中的锁](#5)
 
 <h2 id='1'>1.并发编程的挑战</h2>
 
@@ -295,7 +296,7 @@ mov ecx, exchange_value: 把exchange_value值放到ecx寄存器中。
 mov eax, compare_value: 把compare_value值放到eax寄存器中。  
 ptr [edx]: 以edx内的数值为地址到内存中取值，类似于C语言中的*p。  
 cmpxchg: 比较交换指令，第一操作数先和eax内的数值比较，如果相等zf置1，第二操作数赋给第一操作数；否则zf清0，第一操作数赋给eax。  
-<font color="blue">lock cmpxchg dword ptr [edx], ecx</font> 可以理解为如果地址为dest的内存值与compare_value相等，就把地址为dest的内存值设为exchange。lock前缀确保这条指令原子执行，因为最后的赋值操作会把处理器缓存行里的数据写回到系统内存，并把其他CPU里缓存了的ptr [edx]设为无效。  
+<font color="blue">lock cmpxchg dword ptr [edx], ecx</font> 可以理解为如果地址为dest的内存值与compare_value相等，就把地址为dest的内存值设为exchange_value。lock前缀确保这条指令原子执行，因为最后的赋值操作会把处理器缓存行里的数据写回到系统内存，并把其他CPU里缓存了的ptr [edx]设为无效。  
 
 **如果把i设置为volatile变量呢？**结果是：  
 
@@ -697,6 +698,32 @@ Thread[NotifyThread,5,main] hold lock. notify @ 09:28:07
 Thread[NotifyThread,5,main] hold lock again. sleep @ 09:28:12  
 Thread[WaitThread,5,main] flag is false. running @ 09:28:17  
 
+以上代码提炼出等待/通知的经典范式：
+	
+	class Waiter {
+	    synchronized(object) {
+	        while (条件不满足) {
+	            object.wait();
+	        }
+	        处理对应逻辑
+	    }
+	}
+	
+	class Notifier {
+	    synchronized(object) {
+	        改变条件
+	        object.notifyAll();
+	    }
+	}
+
+操作系统中睡眠、阻塞、挂起的区别形象解释：
+
+首先这些术语都是对于线程来说的。对线程的控制就好比你控制了一个雇工为你干活。你对雇工的控制是通过编程来实现的。  
+**挂起**线程的意思就是你对主动对雇工说：“你睡觉去吧，用着你的时候我主动去叫你，然后接着干活”。  
+使线程**睡眠**的意思就是你主动对雇工说：“你睡觉去吧，过多久后来报到，然后接着干活”。   
+线程**阻塞**的意思就是，你突然发现，你的雇工不知道在什么时候没经过你允许，自己睡觉
+呢，但是你不能怪雇工，本来你让雇工扫地，结果扫帚被偷了或被邻家借去了，你又没让雇工继续干别的活，他就只好睡觉了。
+
 wait():调用该方法的线程进入WAITING状态，只有等待另外线程的通知或者被中断才会返回，需要注意，<font color="red">调用wait()方法后，会释放对象的锁。</font>  
 notify():通知一个在对象上等待的线程，使其从wait()方法返回，而返回的前提是该线程获取到了对象的锁。
 waitThread对象执行到lock.wait()后，释放锁，进入等待状态，不会继续while循环。  
@@ -704,7 +731,195 @@ waitThread对象执行到lock.wait()后，释放锁，进入等待状态，不�
 <ol>
 <li>使用wait(),notify(),notifyAll()时需要先对调用对象加锁。</li>
 <li>调用wait()后，线程状态有RUNNING变为WAITING，并将当前线程放到对象的等待队列。</li>
-<li><font color="red">notify()或notifyAll()方法调用后，等待线程依旧不会从wait()返回，需要调用notify()或notifyAll()的线程释放锁之后，等待线程才有机会从wait()返回。</font></li>
+<li><font color="red">notify()或notifyAll()方法调用后，等待线程依旧不会从wait()返回，需要调用notify()或notifyAll()的线程释放锁之后，等待线程获得了锁才有机会从wait()返回。</font></li>
 </ol>
 
-**问题：**<font color="green">为什么要加锁？wait(),notify()的实现机制是什么？</font>
+**问题：**<font color="green">为什么要加Synchronized锁？wait(),notify()的实现机制是什么？</font>
+wait()调用native方法wait(0)，接口注释中有一句：  
+
+>The current thread must own this object's monitor. 
+
+synchronized的原理之前介绍过，通过monitorenter,monitorexit指令实现，进入synchronized同步块的线程拥有对象的monitor(监视器)。  
+
+native wait()的源码在openjdk\hotspot\src\share\vm\runtime\objectMonitor.cpp中
+
+	void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
+		Thread * const Self = THREAD ;
+
+		...
+
+		// create a node to be put into the queue
+		// Critically, after we reset() the event but prior to park(), we must check
+		// for a pending interrupt.
+		ObjectWaiter node(Self);		// 把线程封装在node中
+		node.TState = ObjectWaiter::TS_WAIT ;
+		Self->_ParkEvent->reset() ;
+		OrderAccess::fence(); 
+		
+		//通过AddWaiter()把node放入WaitSet，WaitSet的数据结构是一个双向循环列表
+		Thread::SpinAcquire (&_WaitSetLock, "WaitSet - add") ;
+		AddWaiter (&node) ;
+		Thread::SpinRelease (&_WaitSetLock) ;
+		
+		if ((SyncFlags & 4) == 0) {
+		    _Responsible = NULL ;
+		}
+		intptr_t save = _recursions; // record the old recursion count
+		_waiters++;                  // increment the number of waiters
+		_recursions = 0;             // set the recursion level to be 1
+		exit (true, Self) ;          // exit the monitor（释放锁）
+		guarantee (_owner != Self, "invariant") ;
+
+		...
+
+		// 通过底层park()方法挂起线程
+		if (node._notified == 0) {
+			if (millis <= 0) {
+				Self->_ParkEvent->park () ;
+			} else {
+				ret = Self->_ParkEvent->park (millis) ;
+			}
+		}
+	
+		if (JvmtiExport::should_post_monitor_waited()) {
+			JvmtiExport::post_monitor_waited(jt, this, ret == OS_TIMEOUT);
+			
+			if (node._notified != 0 && _succ == Self) {
+				node._event->unpark();
+			}
+		}	  
+	}
+
+notify()的实现是先将node._notified置为1，然后从WaitSet中取出一个线程，根据不同策略放到EnterSet或CXQ队列中，CXQ队列可以理解为进入EnterSet前的一个缓冲队列。
+
+wait()相比suspend()最大的区别也是改善，就是调用wait()后线程会释放锁，从而避免死锁。而suspend()不释放锁，线程一直持有锁不放，其他线程长期阻塞，甚至死锁。  
+
+#### 管道输入/输出流
+管道输入/输出流和普通的文件输入/输出流不同之处在于，它主要用于线程之间的数据传输，而传输的媒介为内存。  
+PipedOutputStream, PipedInputStream是面向字节；PipedReader, PipedWriter是面向字符。
+
+#### Thread.join()
+threadA.join()的含义是threadA终止后才从join()返回。  
+Thread.join()主要源码：
+
+	public final synchronized void join(long millis) 
+	throws InterruptedException {
+        if (millis == 0) {
+            while (isAlive()) {
+                wait(0);	// 锁为当前实例对象this,可以写出this.wait(0)
+            }
+		}
+	}
+
+实际上是调用wait()方法实现，当threadA线程终止时，会调用threadA自身的notifyAll(),通知执行threadA.join()的线程可以继续执行了。  
+
+#### ThreadLocal
+ThreadLocal即线程本地（局部）变量，使用方式一般为：
+	
+	ThreadLocal tl = new ThreadLocal();
+	ThreadLocal<T> tlt = new ThreadLocal<T>();
+
+主要的函数为set(),get(), 设置和访问对象的值。它和普通局部变量的区别在于线程在调用ThreadLocal变量的set(value)时都会将当前线程与value绑定，每一线程都会有各自的value变量。  
+set()源码：
+
+	/**
+     * Sets the current thread's copy of this thread-local variable
+     * to the specified value. 
+     * @param value the value to be stored in the current thread's copy of
+     *        this thread-local.
+     */
+    public void set(T value) {
+        Thread t = Thread.currentThread();
+        ThreadLocalMap map = getMap(t);
+        if (map != null)
+            map.set(this, value);
+        else
+            createMap(t, value);
+    }
+
+
+***
+
+<h2 id='5'>5.Java中的锁</h2>
+
+### Lock接口
+在Lock接口出现之前，Java程序是靠synchronized实现锁功能，synchronized是隐式地获取和释放锁；Lock接口是显式地获取和释放锁，它拥有了锁获取和释放的可操作性，可中断的获取锁以及超时获取锁等synchronized所不具备的同步特性。  
+Lock接口的实现基本都是通过聚合一个队列同步器（AbstractQueuedSynchronizer,即AQS）来完成线程访问控制。
+
+### 队列同步器
+同步器依赖内部的同步队列（一个FIFO双向队列）来完成资源获取线程的排队工作。当前线程获取同步状态失败时，同步器会将当前线程以及等待状态等信息构造成为一个节点（Node），同时阻塞当前线程；当同步状态释放时，会把首节点中的线程唤醒，使其再次尝试获取同步状态。同步状态在这里是一个volatile的int变量。  
+
+#### 独占式同步状态获取与释放
+独占式同步状态就是最多只有一个线程获取了同步状态，其他线程都处于等待状态，节点进入同步队列时，把节点设为独占式节点Node.EXCLUSIVE。节点进入同步队列后，就进入自旋的过程，每个节点（线程）都在自省地观察，当自己的前驱节点是头节点时，才能尝试获取同步状态。为什么？  
+<ol>
+<li>头节点是成功获取到同步状态的节点，而头节点的线程释放了同步状态之后，才会唤醒其后继节点，后继节点的线程被唤醒后需要检查自己的前驱节点是否是头节点</li>
+<li>维护同步队列的FIFO原则。</li>
+</ol>
+头节点释放同步状态时，同步器调用tryRelease()方法释放同步状态，然后唤醒头节点的后继节点。  
+
+#### 共享式同步状态的获取与释放
+共享式获取相对于独占式获取来说，最主要的区别在于同一时刻能有多个线程获取到同步状态。节点进入同步队列时，把节点设为共享式节点Node.SHARED。  
+
+### 重入锁
+重入锁ReentrantLock，就是支持重进入的锁，它表示该做可能支持一个线程对资源的重复加锁。  
+synchronized关键字隐式的支持重进入，比如synchronized修饰的递归方法，执行线程在获取锁之后仍能连续多次地获取该锁。  
+实现锁的重进入需要解决2个问题：  
+<ol>
+<li>线程再次获取锁。锁需要去识别获取锁的线程是否为当前占据锁的线程，如果是，则再次成果获取。</li>
+<li>锁的最终释放。线程重复n次获取锁，随后在第n次释放该锁后，其他线程能够获取到该锁。锁的最终释放要求锁对于获取进行计数自增，计数表示当前锁被重复获取的次数，而锁被释放时，计数自减，当计数为0时表示锁已经成功释放。</li>
+</ol>
+
+ReentrantLock一个构造方法ReentrantLock(boolean fair),可以创建公平锁和非公平锁，公平锁指哪个线程先请求就优先获取锁。公平锁可以避免饥饿发生，但ReentrantLock默认是采用非公平锁。因为使用非公平锁时，所有的节点都会竞争获取同步状态，但刚释放锁的线程再次获取同步状态的几率比较大。  
+<font color="green">为什么刚释放锁的线程再次获取同步状态的几率比较大呢？</font>  
+书中没有做解释，个人猜想是线程在释放锁的那一刻，CPU时间片可能还没有用完，而其他线程获得时间片的可能性比较低，这个线程CAS竞争成功的可能性就比较大。
+公平性锁保证了锁的获取按照FIFO原则，而代价是进行大量的线程切换。非公平性锁虽然可能造成线程“饥饿”，但极少的线程切换，保证了其更大的吞吐量。  
+
+### 读写锁
+ReentrantLock属于排他锁，排他锁同一时刻只允许一个线程进行访问，而读写锁在同一时刻可以允许多个读线程访问，但是写线程访问时，所有的读线程和其他写线程均被阻塞。读写锁维护了一对锁，一个读锁和一个写锁，通过分离读锁和写锁，使得并发性相比一般的排他锁有了很大提升。  
+**读锁（共享锁）既然允许多个线程对共享区域进行访问，那么为什么要加锁呢？它存在的意义是什么？**  
+假设一个线程A对共享资源加了读锁，其他线程也可以对其加读锁，但是在读锁没有全部释放前不能对它加写锁，其他线程不能进行写操作。  
+读写锁能够简化读写交互场景的编程方式。假设在程序中定义一个共享的用作缓存数据结构，它大部分时间提供读服务（例如查询和搜索），而写操作占有的时间很少，但是写操作完成之后的更新需要对后续的读服务可见。如果没有读写锁，就要使用Java的等待通知机制，就是当写操作开始时，所有晚于写操作的读操作均会进入等待状态，只有写操作完成并进行通知之后，所有等待的读操作才能继续执行，这是确保读操作能读取到正确的数据。  
+
+#### 读写状态的设计
+读写锁同样依赖自定义同步器来实现同步功能，而读写状态就是其同步器的同步状态。  
+ReentrantLock中同步状态state表示锁被一个线程重复获取的次数。而读写锁自定义同步器需要在state(一个整型变量)上维护多个读线程和写线程的状态。state的高16作为读状态，低16位作为写状态。  
+如果当前线程在获取写锁时，读锁已经被获取（读状态不为0）或者该线程不是已经获取写锁的线程，则当前线程进入等待状态。如果存在读锁，写锁不能被获取。**因为读写锁要确保写锁对读锁可见，如果允许读锁在已被获取的情况下对写锁的获取，那么正在运行的其他读线程就无法感知到当前写线程的操作。因此，只要等待其他读线程都释放读锁，写锁才能被当前线程获取，而写锁一旦被获取，其他读写线程的后续访问均被阻塞。**  
+
+#### 锁降级
+锁降级指写锁降级成为读锁，具体过程是把持当前拥有的写锁，再获取到读锁，随后释放先前拥有的写锁。  
+
+	public class ProcessData {
+	    private static final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
+	    private static final Lock eadLock = rwl.readLock();
+	    private static final Lock writeLock = rwl.writeLock();
+	    private volatile boolean update = false;
+	
+	    public void processData() {
+	        readLock.lock();
+	        if (!update) {
+	            // 必须先释放读锁
+	            readLock.unlock();
+	            // 锁降级从写锁获取到开始
+	            writeLock.lock();
+	            try {
+	                if (!update) {
+	                    // 准备数据的流程（略）
+	                    update = true;
+	                }
+	                readLock.lock();
+	            } finally {
+	                writeLock.unlock();
+	            }
+	            // 锁降级完成，写锁降级为读锁
+	        }
+	        try {
+	            // 使用数据的流程
+				doSomething(update);
+	        } finally {
+	            readLock.unlock();
+	        }
+	    }
+	}
+
+上述示例中的锁降级是有必要的。如果没有锁降级，当前线程对update进行修改后直接释放了写锁，此时另外一个线程对update进行了写操作，那么doSomething(update)就使用了错误的数据，加上读锁后，其他线程就不会再doSomething(update)之前修改update了。  
+RentrantReadWriteLock不支持锁升级（把持读锁、获取写锁，最后释放读锁的过程）。  

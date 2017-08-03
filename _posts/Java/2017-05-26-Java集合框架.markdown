@@ -1,7 +1,525 @@
 ---
 layout: post
 title:  "Java集合框架"
-date:   2017-05-26 9:36:11 +0800
+date:   2017-06-29 14:05:54 +0800
 categories: Java
 ---
 
+## 基本概念
+Java容器类类库的用途是保存对象，并将其划分为两个不同的概念：  
+<ol>
+<li>Collection. 一个独立元素的序列，这些元素都服从一条或多条规则。有3个子接口List, Set, Queue。 List必须按照插入的顺序保存元素，而Set不能有重复元素，Queue按照排队规则来确定对象产生的顺序。</li>
+<li>Map. 一组成对的“键值对”对象，允许你使用键来查找值。有3个常用的实现类HashMap, TreeMap, Hashtable. 映射表允许使用另一个对象来查找某个对象，它被称为“关联数组”或“字典”。如果用自定义的类作为Key，那么必须重写这个类的hashCode()和equals()。</li>
+</ol> 
+
+## List及其实现原理
+有两种类型的List:  
+ArrayList: 擅长随机访问元素，但是在List中间插入和移除元素比较慢。  
+LinkedList: 擅长在List中间进行插入和移除操作，提供了优化的顺序访问。但随机访问方面相对比较慢。  
+
+### ArrayList
+
+ArrayList可以看出一个动态数组，其内部也是用一个数据来保存数据。当添加的数据超出数组长度时会动态扩容。  
+以下是ArrayList在jdk1.8中的部分源码：  
+
+	transient Object[] elementData; // non-private to simplify nested class access
+
+	public boolean add(E e) {
+        ensureCapacityInternal(size + 1);  // Increments modCount!!
+        elementData[size++] = e;
+        return true;
+    }
+	
+	private void ensureCapacityInternal(int minCapacity) {
+        if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
+            minCapacity = Math.max(DEFAULT_CAPACITY, minCapacity);	//DEFAULT_CAPACITY = 10
+        }
+
+        ensureExplicitCapacity(minCapacity);
+    }
+
+	private void ensureExplicitCapacity(int minCapacity) {
+        modCount++;
+
+        // overflow-conscious code
+        if (minCapacity - elementData.length > 0)
+            grow(minCapacity);
+    }
+
+	private void grow(int minCapacity) {
+        // overflow-conscious code
+        int oldCapacity = elementData.length;
+        int newCapacity = oldCapacity + (oldCapacity >> 1);
+        if (newCapacity - minCapacity < 0)
+            newCapacity = minCapacity;
+        if (newCapacity - MAX_ARRAY_SIZE > 0)
+            newCapacity = hugeCapacity(minCapacity);
+        // minCapacity is usually close to size, so this is a win:
+        elementData = Arrays.copyOf(elementData, newCapacity);
+    }
+
+从源代码可以看出，ArrayList把数据存放在elementData中，transient修饰的变量不参与序列化。比如密码之类的东西，不想保存在本地或者传输到网络。  
+ArrayList扩容的规律是newCapacity = oldCapacity * 1.5。如果创建ArrayList时采用默认长度10，把20个对象放在ArrayList中的扩容过程：当添加第11个对象时，elementData的扩容到15， 当添加16个对象时，elementData扩容到22。  
+数组扩容使用的是Arrays.copyOf()，它的内部实现是调用本地方法System.arraycopy(Object src, int srcPos, Object dest, int destPos, int length)。  
+
+### LinkedList
+LinkedList实质上是一个双向链表，拥有一个头指针和尾指针。（LinkedList实现了List, Deque等接口，Deque是双向队列，它继承于Queue。）LinkedList不擅长随机访问，当调用get(index)时，先比较index与size/2的大小，再判断从前往后找还是从后往前找。  
+
+### Stack
+Stack继承自Vector，而Vector是实现和ArrayList很像，都是使用动态数组。Stack从代码可读性上来说更体现栈的本意。LinkedList具有能够直接实现栈的所有功能的方法，因此可以直接将LinkedList作为栈使用。不过，有时一个真正的“栈”更能把事情讲清楚。这大概就是java.util.Stack仍然存在的原因吧。  
+
+## Set
+Set不保存重复元素。实现Set接口的常用的类有HashSet, LinkedHashSet, TreeSet。Set继承于Collection，它具有与Collection完全一样的接口，没有额外的功能。实际上Set就是Collection，只是行为不同。<font color="blue">这是继承与多态思想的典型应用：表现不同行为。</font>  
+Set的实现是借助了Map。  
+
+	public class HashSet<E> extends AbstractSet<E> 
+	implements Set<E>, Cloneable, java.io.Serializable
+	{
+		private transient HashMap<E,Object> map;
+    	private static final Object PRESENT = new Object();
+
+		public HashSet() { map = new HashMap<>(); }
+		public boolean add(E e) { return map.put(e, PRESENT)==null; }
+	}
+	
+	public class TreeSet<E> extends AbstractSet<E>
+    implements NavigableSet<E>, Cloneable, java.io.Serializable
+	{	
+		private transient NavigableMap<E,Object> m;
+		private static final Object PRESENT = new Object();
+
+	    public TreeSet() { this(new TreeMap<E,Object>()); }
+		public boolean add(E e) { return m.put(e, PRESENT)==null; }
+	}
+
+## Queue
+队列是典型的FIFO的容器。队列在并发编程中非常重要，因为它可以安全地将对象从一个任务传输给另一个任务。  
+LinkedList实现了Queue接口，因此LinkedList可以用作Queue的一种实现，通过将LinkedList向上转型为Queue：  
+
+	Queue<E> q = new LinkedList<E>();
+
+### PriorityQueue
+优先队列要求对象按照设定的优先级出队。假设有一个任务队列，某个任务需要尽快处理，在入队前可以把它的优先级升到最高，能够保证尽快出队。
+PriorityQueue中的一个构造方法如下：  
+	
+	public PriorityQueue(Comparator<? super E> comparator)
+
+当在PriorityQueue上调用offer()方法来插入一个对象时，这个对象会在队列中被排序，实际上是内部通过维护一个堆来实现。  
+
+	public boolean offer(E e) {
+        if (e == null)
+            throw new NullPointerException();
+        modCount++;
+        int i = size;
+        if (i >= queue.length)
+            grow(i + 1);
+        size = i + 1;
+        if (i == 0)
+            queue[0] = e;
+        else
+            siftUp(i, e);
+        return true;
+    }
+
+	//堆中元素上浮
+	private void siftUp(int k, E x) {
+        if (comparator != null)
+            siftUpUsingComparator(k, x);
+        else
+            siftUpComparable(k, x);
+    }
+	
+	//插入元素与其父节点比较，条件不满足就交换
+    private void siftUpUsingComparator(int k, E x) {
+        while (k > 0) {
+            int parent = (k - 1) >>> 1;		// 完全二叉树的性质
+            Object e = queue[parent];
+            if (comparator.compare(x, (E) e) >= 0)
+                break;
+            queue[k] = e;
+            k = parent;
+        }
+        queue[k] = x;
+    }
+
+	// x从第k个位置开始下沉， 用于删除堆顶元素时
+	private void siftDownUsingComparator(int k, E x) {
+        int half = size >>> 1;
+        while (k < half) {
+            int child = (k << 1) + 1;
+            Object c = queue[child];
+            int right = child + 1;
+            if (right < size &&
+                comparator.compare((E) c, (E) queue[right]) > 0)
+                c = queue[child = right];
+            if (comparator.compare(x, (E) c) <= 0)
+                break;
+            queue[k] = c;
+            k = child;
+        }
+        queue[k] = x;
+    }
+
+
+## Map及其实现原理
+
+### HashMap
+JDK7与JDK8对HashMap的实现有一定区别，JDK7中采用数组加链表的形式存储，JDK8中当链表达到一定长度时，会转化为红黑树存储。
+
+#### JDK7中的HashMap
+
+	transient Entry<K,V>[] table = (Entry<K,V>[]) EMPTY_TABLE;
+
+	static class Entry<K,V> implements Map.Entry<K,V> {
+        final K key;
+        V value;
+        Entry<K,V> next;
+        int hash;
+
+        Entry(int h, K k, V v, Entry<K,V> n) {
+            value = v;
+            next = n;
+            key = k;
+            hash = h;
+        }
+		...
+	}
+
+	public V put(K key, V value) {
+        if (table == EMPTY_TABLE) {
+            inflateTable(threshold);
+        }
+        if (key == null)
+            return putForNullKey(value);
+        int hash = hash(key);
+        int i = indexFor(hash, table.length);
+        for (Entry<K,V> e = table[i]; e != null; e = e.next) {	//先检查是否包含键值对
+            Object k;
+            if (e.hash == hash && ((k = e.key) == key || key.equals(k))) {
+                V oldValue = e.value;
+                e.value = value;
+                e.recordAccess(this);
+                return oldValue;
+            }
+        }
+
+        modCount++;
+        addEntry(hash, key, value, i);
+        return null;
+    }
+	
+	void addEntry(int hash, K key, V value, int bucketIndex) {
+        if ((size >= threshold) && (null != table[bucketIndex])) {
+            resize(2 * table.length);	// table扩容
+            hash = (null != key) ? hash(key) : 0;
+            bucketIndex = indexFor(hash, table.length);
+        }
+        createEntry(hash, key, value, bucketIndex);
+    }
+	
+	// 先创建的节点放在表头，即table[]中
+	void createEntry(int hash, K key, V value, int bucketIndex) {
+        Entry<K,V> e = table[bucketIndex];
+        table[bucketIndex] = new Entry<>(hash, key, value, e);
+        size++;		// size为HashMap中元素的个数
+    }
+
+	public V get(Object key) {
+        if (key == null)
+            return getForNullKey();
+        Entry<K,V> entry = getEntry(key);
+
+        return null == entry ? null : entry.getValue();
+    }
+
+	final Entry<K,V> getEntry(Object key) {
+        if (size == 0) {
+            return null;
+        }
+
+        int hash = (key == null) ? 0 : hash(key);
+        for (Entry<K,V> e = table[indexFor(hash, table.length)];
+             e != null;
+             e = e.next) {
+            Object k;
+            if (e.hash == hash &&
+                ((k = e.key) == key || (key != null && key.equals(k))))
+                return e;
+        }
+        return null;
+    }
+
+当两个key通过hashCode计算相同时，则发生了hash冲突(碰撞)，HashMap解决hash冲突的方式是用链表。put(K, V)时，需要判断HashMap中是否包含K。  
+
+**问题1：自定义的类的对象能够作为Key吗？**  
+可以，但是要重写类的hashCode()和equals()。因为自定义的类继承于Object， Object中的hashCode()为本地方法，返回的是对象的内存地址，equals(Object obj)则return (this == obj)。如果不重写，可能会把多个意义相同的对象作为多个键放入HashMap中。  
+假设现在有一张全班学生的成绩表，但是里面有重复的数据，比如<xiaoming, 96>出现了两次。要把这张表存储在HashMap<Student, grade>中，xiaoming在这里就是意义完全相同的两个对象。逻辑上应该把他作为一个键来处理。  
+所以自定义的类作为K需要重写equals(), jdk8的官方文档中对[java.lang.Object的hashCode()](http://docs.oracle.com/javase/tutorial/java/IandI/objectclass.html)方法描述如下
+
+>The value returned by hashCode() is the object's hash code, which is the object's memory address in hexadecimal.  
+By definition, if two objects are equal, their hash code must also be equal. If you override the equals() method, you change the way two objects are equated and Object's implementation of hashCode() is no longer valid. Therefore, if you override the equals() method, you must also override the hashCode() method as well.
+
+**问题2:可变对象能够作为Key吗？**  
+可变对象作Key是非常危险的。 因为HashMap在put和get时都是根据Key.hashCode()计算得到对象的哈希码。如果put之后，Key内部成员改变了，那么它的hashCode也可能发生改变（取决于Key的hashCode()方法怎么写的）。然后再get()时，程序根据新的hashCode计算出新的哈希码，得到了新的table[]下标。  
+	
+	static final int hash(Object key) {
+        int h;
+        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+    }
+
+	public V get(Object key) {
+        Node<K,V> e;
+        return (e = getNode(hash(key), key)) == null ? null : e.value;
+    }
+
+	final Node<K,V> getNode(int hash, Object key) {
+        Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
+        if ((tab = table) != null && (n = tab.length) > 0 &&
+            (first = tab[(n - 1) & hash]) != null) {
+        ...
+    }
+
+**问题3：HashMap源码里定义的key为final类型，为什么可变对象key还是可以改变呢？**
+
+	static class Node<K,V> implements Map.Entry<K,V> {
+        final int hash;
+        final K key;
+        V value;
+        Node<K,V> next;
+		...
+	}
+
+因为key只是一个引用，将它定义为final类型，意为一旦它指向某个对象，就不能再指向其他对象，而这个对象内的成员依然是可以改变的。
+
+参考：[危险！在HashMap中将可变对象用作Key](http://www.importnew.com/13384.html)
+
+#### JDK8中的HashMap
+一直到JDK7为止，HashMap的结构都是这么简单，基于一个数组以及多个链表的实现，hash值冲突的时候，就将对应节点以链表的形式存储。  
+
+这样子的HashMap性能上就抱有一定疑问，如果说成百上千个节点在hash时发生碰撞，存储一个链表中，那么如果要查找其中一个节点，那就不可避免的花费O(N)的查找时间，这将是多么大的性能损失。这个问题终于在JDK8中得到了解决。再最坏的情况下，链表查找的时间复杂度为O(n),而红黑树一直是O(logn),这样会提高HashMap的效率。  
+JDK7中HashMap采用的是位桶 + 链表的方式，即我们常说的散列链表的方式，而JDK8中采用的是位桶+链表/红黑树（有关红黑树请查看[红黑树](https://my.oschina.net/hosee/blog/618828)）的方式，也是非线程安全的。当某个位桶的链表的长度达到某个阈值的时候，这个链表就将转换成红黑树。  
+![](http://wx4.sinaimg.cn/mw690/b17a6fd6gy1fh5luuedkij20950artb5.jpg)
+
+	transient Node<K,V>[] table;
+	static final int TREEIFY_THRESHOLD = 8;	// 当冲突节点数大于或等于TREEIFY_THRESHOLD时，转换成红黑树
+
+	static class Node<K,V> implements Map.Entry<K,V> {
+        final int hash;
+        final K key;
+        V value;
+        Node<K,V> next;
+		...
+	}
+
+	public V put(K key, V value) {
+        return putVal(hash(key), key, value, false, true);
+    }
+
+	final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
+                   boolean evict) {
+        Node<K,V>[] tab; Node<K,V> p; int n, i;
+        if ((tab = table) == null || (n = tab.length) == 0)
+            n = (tab = resize()).length;
+        if ((p = tab[i = (n - 1) & hash]) == null)	// 要插入的键对应在tab中的位置上没有元素
+            tab[i] = newNode(hash, key, value, null);
+        else {	// tab[i]上有元素
+            Node<K,V> e; K k;
+            if (p.hash == hash &&
+                ((k = p.key) == key || (key != null && key.equals(k))))
+                e = p;
+            else if (p instanceof TreeNode)		// p为红黑树节点
+                e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+            else {
+                for (int binCount = 0; ; ++binCount) {
+                    if ((e = p.next) == null) {
+                        p.next = newNode(hash, key, value, null);
+                        if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                            treeifyBin(tab, hash);	// 转化为红黑树
+                        break;
+                    }
+                    if (e.hash == hash &&
+                        ((k = e.key) == key || (key != null && key.equals(k))))
+                        break;
+                    p = e;
+                }
+            }
+            if (e != null) { // existing mapping for key
+                V oldValue = e.value;
+                if (!onlyIfAbsent || oldValue == null)
+                    e.value = value;
+                afterNodeAccess(e);		// HashMap中未实现，只是作为方法接口提供给LinkedHashMap
+                return oldValue;
+            }
+        }
+        ++modCount;
+        if (++size > threshold)
+            resize();
+        afterNodeInsertion(evict);	// HashMap中未实现，只是作为方法接口提供给LinkedHashMap
+        return null;
+    }
+
+
+#### LinkedHashMap
+LinkedHashMap和HashMap的区别在于LinkedHashMap会维护插入的顺序。写一个简单的LinkedHashMap程序：  
+
+	LinkedHashMap<String, Integer> lmap = new LinkedHashMap<String, Integer>();
+	lmap.put("语文", 1);
+	lmap.put("数学", 2);
+	lmap.put("英语", 3);
+	for(Entry<String, Integer> entry : lmap.entrySet()) {
+	    System.out.println(entry.getKey() + ": " + entry.getValue());
+	}
+
+打印结果：  
+语文: 1  
+数学: 2  
+英语: 3  
+
+LinkedHashMap是维护了
+一个具有访问顺序的双向链表，LinkedHashMap中的Entry中添加了before, after。  
+ 
+    static class Entry<K,V> extends HashMap.Node<K,V> {
+        Entry<K,V> before, after;	// 前驱和后继
+        Entry(int hash, K key, V value, Node<K,V> next) {
+            super(hash, key, value, next);
+        }
+    }
+
+	transient LinkedHashMap.Entry<K,V> head;	// 指向链表首节点
+    transient LinkedHashMap.Entry<K,V> tail;	// 指向链表尾节点
+
+LinkedHashMap并未重写put()，而是重写了afterNodeAccess() 和 afterNodeInsertion()。添加元素时，把新节点加在tail后，从而在逻辑上形成了一条双向链表。  
+
+如果使用上述方式遍历Map内的元素，LinkedHashMap比HashMap的效率要高一点。foreach循环再编译后会转化为迭代器的方式遍历。  
+HashMap中遍历元素会先在table[]中查找有链表的位桶，然后遍历完这条链表，然后继续查找table[]，以此类推...  
+LinkedHashMap则直接遍历逻辑上的双向链表。去掉了table[]的访问开销。  
+
+### TreeMap
+TreeMap属于SortedMap, 它内部是通过红黑树来实现的。红黑树是一种**二叉查找树**，在每个结点上增加一个存储位表示结点的颜色，可以是Red或Black。  
+红黑树在二叉查找树的前提下要满足一下5条性质：  
+<ol>
+<li>每个结点要么是红的要么是黑的。</li>
+<li>根结点是黑的。</li>
+<li>每个叶结点（叶结点即指树尾端NIL指针或NULL结点）都是黑的。</li>
+<li>如果一个结点是红的，那么它的两个儿子都是黑的。</li>
+<li>对于任意结点而言，其到叶结点树尾端NIL指针的每条路径都包含相同数目的黑结点。</li>
+</ol>
+这5条性质可以推导出：**红黑树的 最大高度 < 2 * 最小高度**。最小高度的情况是从根节点到叶子节点全是黑色，最大高度的情况是从黑红节点交替出现。  
+红黑树相比平衡二叉树，牺牲了平衡二叉树苛刻的平衡性（换取“适度平衡”），但减少了维护平衡树的开销。  
+TreeMap的节点定义如下：  
+
+	static final class Entry<K,V> implements Map.Entry<K,V> {
+        K key;
+        V value;
+        Entry<K,V> left;
+        Entry<K,V> right;
+        Entry<K,V> parent;
+        boolean color = BLACK;
+        ...
+	}
+
+
+TreeMap在put元素时，以key为比较对象，按照二叉查找树那一套插入到树中，然后再根据红黑树的性质调整。详情见[红黑树](https://my.oschina.net/hosee/blog/618828) 。  
+TreeMap添加元素，取出元素的性能比HashMap低，但它的优势在于所有的Entry总是按key根据指定排序规则保持有序状态。  
+
+### Hashtable
+Hashtable几乎可以等价于HashMap，JDK8中的Hashtable没有引入红黑树，相比JDK7的没有太大修改，仍然采用位桶 + 链表的形式。  
+Hashtable与HashMap的区别：  
+<ol>
+<li>Hashtable是线程安全的，几乎所有的共有方法都是synchronized的，即使不是synchronized method, 内部也有同步机制。多个线程可以共享一个Hashtable, 而如果没有正确地同步的话，多个线程是不能共享HashMap的。</li>
+<li>HashMap允许键（key）或值（value）为null， 而Hashtable不行，key和value都不能为null。</li>
+<li>HashMap的迭代器是fail-fast迭代器，这是HashMap线程不安全导致的，当一个线程正在访问HashMap时，其他线程修改了HashMap的结构（增加或移除元素），将抛出ConcurrentModificationException异常。 而Hashtable的enumerator迭代器（一种遗留的迭代器）不是fail-fast。</li>
+</ol>
+
+	abstract class HashIterator {
+        Node<K,V> next;        // next entry to return
+        Node<K,V> current;     // current entry
+        int expectedModCount;  // for fast-fail
+        int index;             // current slot
+
+        HashIterator() {
+            expectedModCount = modCount;
+            Node<K,V>[] t = table;
+            current = next = null;
+            index = 0;
+            if (t != null && size > 0) { // advance to first entry
+                do {} while (index < t.length && (next = t[index++]) == null);
+            }
+        }
+
+        final Node<K,V> nextNode() {
+            Node<K,V>[] t;
+            Node<K,V> e = next;
+            if (modCount != expectedModCount)	// modCount全称modify count
+                throw new ConcurrentModificationException();
+            ...
+        }
+	}
+
+### ConcurrentHashMap
+前面说过HashMap是线程不安全的，那么多线程环境下，HashMap会出现什么问题呢？  
+在多线程环境下，使用HashMap进行put操作会引起死循环，因为多线程会导致HashMap的Node链表形成环形数据结构，一旦形成环形，Node的next节点就永远不为空。 出现环形链表发生在table[]扩容时。详情见：[HashMap多线程并发问题分析](http://www.cnblogs.com/andy-zhou/p/5402984.html) 。  
+Hashtable使用synchronized来保证线程安全，但是线程竞争激烈的情况下Hashtable的效率非常低，因为当一个线程访问Hashtable的同步方法，其他线程就不能访问Hashtable的同步方法了。因为普通synchronized方法的锁对象是HashMap的实例对象，静态synchronized方法的锁对象是HashMap的Class对象。 如果线程1使用put进行元素添加，线程2即不能使用put方法，也不能使用get方法，所以竞争越激烈效率越低。  
+
+假如容器里有多把锁，每一把锁用于锁容器其中一部分数据，那么当多线程访问容器里不同数据段的数据时，线程间就不会存在锁竞争，从而可以有效提高并发访问效率。说了这么多都是为了引出ConcurrentHashMap。  
+ConcurrentHashMap使用锁分段技术，首先将数据分成一段一段地存储，然后给每一段数据配一把锁，当一个线程占用锁访问其中一个段数据时，其他段的数据也能被访问。  
+JDK7中ConcurrentHashMap存储结构如下：  
+![ConcurrentHashMap存储结构](http://wx3.sinaimg.cn/mw690/b17a6fd6ly1fhb9ptkceoj208008gjrl.jpg)  
+ConcurrentHashMap是由Segment数组 和 HashEntry数组 组成。 **Segment继承于ReentrantLock，扮演锁的角色。** 一个Segment里包含一个HashEntry数组table[], 每个HashEntry是一个链表结构的元素。 一个Segment就类似于一个HashMap。 每个Segment守护着一个table[]里的元素。  
+
+#### put
+ConcurrentHashMap调用put()时，先根据key计算定位到segment, 然后再调用segment.put(), Segment中的put()添加元素时，会加锁。这样就实现了单个Segment内数据的锁定。
+
+	public V put(K key, V value) {
+        Segment<K,V> s;
+        if (value == null)
+            throw new NullPointerException();
+        int hash = hash(key);
+        int j = (hash >>> segmentShift) & segmentMask;
+        if ((s = (Segment<K,V>)UNSAFE.getObject          // nonvolatile; recheck
+             (segments, (j << SSHIFT) + SBASE)) == null) //  in ensureSegment
+            s = ensureSegment(j);
+        return s.put(key, hash, value, false);
+    }
+
+	static final class Segment<K,V> extends ReentrantLock implements Serializable {
+
+		transient volatile HashEntry<K,V>[] table;
+
+		final V put(K key, int hash, V value, boolean onlyIfAbsent) {
+            HashEntry<K,V> node = tryLock() ? null :
+                scanAndLockForPut(key, hash, value);
+            try {
+                ...
+            } finally {
+                unlock();
+            }
+            return oldValue;
+        }
+		...
+	}
+
+
+#### get
+ 
+get操作也是先定位Segment，然后再定位table[]中的HashEntr。get操作的高效在于整个get过程不需要加锁。原因是所有访问共享变量的操作都使用UNSAFE.getObjectVolatile(), Unsafe对象的getObjectVolatile()提供的原子读语义保证共享变量segments[]和table[]的可见性。
+
+	public V get(Object key) {
+        Segment<K,V> s; // manually integrate access methods to reduce overhead
+        HashEntry<K,V>[] tab;
+        int h = hash(key);
+        long u = (((h >>> segmentShift) & segmentMask) << SSHIFT) + SBASE;
+        if ((s = (Segment<K,V>)UNSAFE.getObjectVolatile(segments, u)) != null &&
+            (tab = s.table) != null) {
+            for (HashEntry<K,V> e = (HashEntry<K,V>) UNSAFE.getObjectVolatile
+                     (tab, ((long)(((tab.length - 1) & h)) << TSHIFT) + TBASE);
+                 e != null; e = e.next) {
+                K k;
+                if ((k = e.key) == key || (e.hash == h && key.equals(k)))
+                    return e.value;
+            }
+        }
+        return null;
+    }
+
+get操作只需要读不需要写，所以不需要加锁。之所以不会读到过期的值，是因为volatile变量建立的happens-before规则，对一个volatile变量的读，总能看到（任意线程）之前对这个volatile变量的最后的写入。即使两个线程同时修改和获取volatile变量，get操作也能拿到最新的值。  

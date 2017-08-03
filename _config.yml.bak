@@ -1,0 +1,37 @@
+# Site settings
+title: Chiryen's Personal Website
+email: chiryen@163.com
+description: Chiryen's Ideas & Blogs
+# > # this means to ignore newlines until "baseurl:"
+#   Write an awesome description for your new site here. You can edit this
+#   line in _config.yml. It will appear in your document head meta (for
+#   Google search results) and in your feed.xml site description.
+
+# baseurl: "" # the subpath of your site, e.g. /blog/
+# url: "http://yourdomain.com" # the base hostname & protocol for your site
+# twitter_username: jekyllrb
+github_username: chiryen
+permalink: /:year/:month/:day/:title/
+# this is the url root of the view source link on the footer page.
+viewsourceroot: https://github.com/chiryen/chiryen.github.io/blob/master/
+# this is the url root of the create page link on the footer page.
+newsourceroot: https://github.com/chiryen/chiryen.github.io/new/master
+#########################################
+# for duoshuo.com commenting system, uncomment following line if you do not want to include duoshuo.com. 
+#duoshuo_shortname: lixizhi
+#duoshuo_url: "http://lixizhi.github.io"
+# disqus.com commenting system. please note that it is exclusive with duoshuo.com
+disqus_shortname: chiryen
+disqus_url: "http://chiryen.github.io"
+#########################################
+
+# Build settings
+markdown: kramdown
+coderay_tab_width: 2
+
+# highlight
+# highlighter: pygments
+# highlighter: rouge
+# highlighter: false
+
+port: 4040
