@@ -1,0 +1,127 @@
+---
+layout: post
+title:  "拜访--美团2016笔试题"
+categories: 算法
+---
+现在有一个城市销售经理，需要从公司出发，去拜访市内的商家，已知他的位置以及商家的位置，但是由于城市道路交通的原因，他只能在左右中选择一个方向，在上下中选择一个方向，现在问他有多少种方案到达商家地址。
+给定一个地图map及它的长宽n和m，其中1代表经理位置，2代表商家位置，-1代表不能经过的地区，0代表可以经过的地区，请返回方案数，保证一定存在合法路径。保证矩阵的长宽都小于等于10。  
+
+测试样例：  
+[[0,1,0],[2,0,0]],2,3
+返回：  
+2
+
+[拜访](https://www.nowcoder.com/practice/12cbdcdf5d1e4059b6ddd420de6342b6?tpId=49&tqId=29283&tPage=1&rp=1&ru=%2Fta%2F2016test&qru=%2Fta%2F2016test%2Fquestion-ranking)
+
+题目中的方向选择只能有四种情况（左，上），（右，上），（左，下），（右，下）。  
+题目提示用动态规划解，但我一开始没看到。由于矩阵长宽不超过10，用DFS解法AC了。
+
+DFS解法： 
+
+	import java.util.*;
+ 
+	public class Visit {
+	    private int[] dx = new int[2];
+	    private int[] dy = new int[2];
+	    private static int cnt = 0;
+	 
+	    private void dfs (int[][] map, boolean[][] visited, int n, int m, int x, int y) {
+	        if (map[y][x] == 2) {
+	            cnt ++;
+	            return ;
+	        }
+	        int nextx, nexty;
+	        nextx = x + dx[0];
+	        nexty = y + dy[0];
+	        if (nextx >= 0 && nextx < m
+	                && nexty >= 0 && nexty < n
+	                && !visited[nexty][nextx]
+	                && map[nexty][nextx] != -1) {
+	            dfs(map, visited, n, m, nextx, nexty);
+	            visited[nexty][nextx] = false;
+	        }
+	        nextx = x + dx[1];
+	        nexty = y + dy[1];
+	        if (nextx >= 0 && nextx < m
+	                && nexty >= 0 && nexty < n
+	                && !visited[nexty][nextx]
+	                && map[nexty][nextx] != -1) {
+	            dfs(map, visited, n, m, nextx, nexty);
+	            visited[nexty][nextx] = false;
+	        }
+	    }
+	 
+	    public int countPath(int[][] map, int n, int m) {
+	        // write code here
+	        int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+	        for (int i = 0; i < n; i ++) {
+	            for (int j = 0; j < m; j ++) {
+	                if (map[i][j] == 1) {
+	                    x1 = j;
+	                    y1 = i;
+	                }
+	                if (map[i][j] == 2) {
+	                    x2 = j;
+	                    y2 = i;
+	                }
+	            }
+	        }
+	 
+	        if (x1 < x2) {
+	            dx[0] = 1; dx[1] = 0;
+	        } else {
+	            dx[0] = -1; dx[1] = 0;
+	        }
+	 
+	        if (y1 < y2) {
+	            dy[0] = 0; dy[1] = 1;
+	        } else {
+	            dy[0] = 0; dy[1] = -1;
+	        }
+	        cnt = 0;
+	        boolean[][] visited = new boolean[n][m];
+	        dfs(map, visited, n, m, x1, y1);
+	        return cnt;
+	    }
+	 
+	}
+
+
+动态规划解法：  
+	
+	public int countPath(int[][] map, int n, int m) {
+        // write code here
+        int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+        for (int i = 0; i < n; i ++) {
+            for (int j = 0; j < m; j ++) {
+                if (map[i][j] == 1) {
+                    x1 = j;
+                    y1 = i;
+                }
+                if (map[i][j] == 2) {
+                    x2 = j;
+                    y2 = i;
+                }
+            }
+        }
+
+        int xx = x1 < x2 ? 1 : -1;
+        int yy = y1 < y2 ? 1 : -1;
+
+        // dp[i][j]表示从(y1, x1)到(j, i)位置有多少种走法
+        int[][] dp = new int[n][m];
+        dp[y1][x1] = 1;
+        for (int i = y1 + yy; i != y2 + yy; i += yy) {
+            dp[i][x1] = map[i][x1] == -1 ? 0 : dp[i - yy][x1];
+        }
+        for (int j = x1 + xx; j != x2 + xx; j += xx) {
+            dp[y1][j] = map[y1][j] == -1 ? 0 : dp[y1][j - xx];
+        }
+
+        for (int i = y1 + yy; i != y2 + yy; i += yy) {
+            for (int j = x1 + xx; j != x2 + xx; j += xx) {
+                dp[i][j] = map[i][j] == -1 ? 0 : dp[i - yy][j] + dp[i][j - xx];
+            }
+        }
+        return dp[y2][x2];
+    }
