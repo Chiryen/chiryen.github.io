@@ -1,0 +1,136 @@
+---
+layout: post
+title:  "单例模式"
+date:   2017-09-08 10:34:31 +0800
+categories: 设计模式
+---
+
+### 单例模式确保一个类只有一个实例，并提供一个全局访问点。  
+
+大神：一些对象我们只需要一个，比如：线程池、缓存、日志对象等。如果制造出多个实例，就会出现问题，例如：程序的异常行为，资源使用过量，或者结果不一致。  
+小菜：可以靠程序员约定只创建一个或者利用全局变量，利用java的静态变量就可以做到。  
+大神：的确可以通过程序员约定，但程序员很多，可能会有人忘了这个约定。单例模式给了一个全局的访问点，和全局变量一样方便，有没有全局变量的缺点。  
+小菜：什么缺点？  
+大神：全局变量容易造成命名冲突，而且你必须在程序一开始就创建好对象，万一这个对象非常耗资源，而程序在前面大部分时间没有用它，就形成了浪费。  
+
+### 懒汉式单例模式
+
+	public class Singleton {
+	    private static Singleton instance;
+	    private Singleton() {}
+	    public static Singleton getInstance() {
+	        if (instance == null) {			// 1
+	            instance = new Singleton();		// 2
+	        }
+	        return instance;
+	    }
+	}
+
+利用<font color="red">私有的</font>构造器产生一个Singleton实例并赋值给instance。如果我们不需要这个实例，它就永远不会产生。这就是“**延迟实例化**”。  
+
+懒汉式单例模式在单线程环境下可以正常使用，多线程情况下会出现问题，可能会创建多个对象。比如线程A执行完代码1后，切换到线程B，线程B执行了代码1和代码2并成功创建了一个对象。这时再切换到线程A,线程A依然会执行代码2，并创建一个对象。  
+
+#### 1.synchronized getInstance()
+既然在代码1和代码2处会出现线程不安全，getInstance()中的一系列动作被中断，那么就对它们加锁。把getInstance()变成同步（Synchronized）方法。
+
+	public class Singleton {
+	    private static Singleton instance;
+	    private Singleton() {}
+	    public static synchronized Singleton getInstance() {
+	        if (instance == null) {			// 1
+	            instance = new Singleton();		// 2
+	        }
+	        return instance;
+	    }
+	}
+
+#### 2.双重检查锁定
+由于对getInstance()方法做了同步处理，synchronized将导致性能开销。如果getInstance()方法被多个线程频繁调用，将会导致程序执行性能下降。因此，双重检查锁定（Double-Checked Locking）出现了。
+
+	public class Singleton {
+	    private static Singleton instance;
+	    private Singleton() {}
+	    public Singleton getInstance() {
+	        if (instance == null) {				// 1
+	            synchronized (Singleton.class) {		// 2
+	                if (instance == null)			// 3
+	                    instance = new Singleton();		// 4
+	            }
+	        }
+	        return instance;		// 5
+	    }
+	}
+
+这种方式实际上是synchronized getInstance()的一种变种。就是在同步块之外判断instance是否为null。如果线程检查instance != null,那么就不需要执行下面的加锁和初始化操作。因此可以大幅降低synchronized带来的性能开销。看起来很完美...  
+<font color="red">但是，这种方法存在问题！！！原因是当线程执行到代码1时，取到的instance不为null, instance引用的对象有可能还没有初始化。</font>   
+  
+在上一段代码中的代码4(instance = new Singleton();)创建一个对象。这个代码可以分解为如下3行伪代码。  
+
+	memory = allocate();		// 1.分配对象的内存空间
+	ctorInstance(memory);		// 2.初始化对象
+	instance = memory;		// 3.设置instance指向刚分配的内存地址
+
+上面代码2和代码3可能发生重排序，重排序后的执行时序如下：  
+
+	memory = allocate();		// 1.分配对象的内存空间
+	instance = memory;		// 3.设置instance指向刚分配的内存地址
+	ctorInstance(memory);		// 2.初始化对象
+
+如果线程A在执行instance = memory;后，切换到线程B，线程B判断instance != null;就会return instance; 导致错误。 问题的根源出现在重排序上。  
+
+我们可以想出像个办法来实现线程安全的延迟初始化。  
+<ol>
+<li>不允许2和3重排序。</li>
+<li>允许2和3重排序，但不允许其他线程看到这个重排序。</li>
+</ol>
+
+**1）基于volatile的解决方案**  
+把instance声明为volatile类型变量。  
+
+	public class Singleton {
+	    private volatile static Singleton instance;
+	    private Singleton() {}
+	    public Singleton getInstance() {
+	        if (instance == null) {				// 1
+	            synchronized (Singleton.class) {		// 2
+	                if (instance == null)			// 3
+	                    instance = new Singleton();		// 4
+	            }
+	        }
+	        return instance;		// 5
+	    }
+	}
+
+这个解决方案需要JDK5或更高版本支持，从JDK5开始使用了新的JSR-133内存模型规范，这个规范增强了volatile的语义。  
+instance声明为volatile后，伪代码中2和3之间重排序在多线程环境中会被禁止。  
+
+**2）基于静态内部类初始化的解决方案**  
+这个解决方案是让重排序对其他线程不可见。  
+JVM在类的初始化阶段（即在Class被加载后，且被线程使用之前），会获取去获取一个锁。可以将instance = new Instance();这一步放在这个锁内进行。
+
+	public class Singleton {
+        private static class InstanceHolder {
+            public static Singleton instance = new Singleton();
+        }
+	    private Singleton() {}
+	    public static Singleton getInstance() {
+	        return InstanceHolder.instance;
+	    }
+	}
+
+首先执行getInstance()方法的线程将导致InstanceHolder类被初始化，该线程获取Class对象的初始化锁，直到初始化结束才释放锁。  
+
+### 饿汉式单例模式
+饿汉式单例模式是线程安全的，相比懒汉式它更加急切地创建实例。
+
+	public class Singleton {
+        private static Singleton instance = new Singleton();
+
+	    private Singleton() {}
+
+	    public static Singleton getInstance() {
+	        return instance;
+	    }
+	}
+
+这种做法是依赖JVM在加载Singleton类时，在静态初始化器（static initializen）中创建单例。静态初始化器是完成static域部分的执行，类第一次使用的时候执行，相当于完成类的初始化操作。
