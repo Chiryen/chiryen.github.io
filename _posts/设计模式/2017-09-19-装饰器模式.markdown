@@ -1,0 +1,111 @@
+---
+layout: post
+title:  "装饰器模式"
+date:   2017-09-19 14:56:14 +0800
+categories: 设计模式
+---
+
+### 装饰器模式是动态地给一个对象添加一些额外的功能，相比继承来说更加灵活，耦合性更低。  
+
+![](http://wx3.sinaimg.cn/large/b17a6fd6gy1fjow2adc2uj20f00chwf5.jpg)
+
+	public abstract class Component {
+	    public abstract void operate();
+	}
+
+	public class ConcreteComponent extends Component {
+	
+	    @Override
+	    public void operate() {
+	        System.out.println("do Something");
+	    }
+	}
+
+	public class ConcreteDecorator1 extends Decorator {
+	
+	    public ConcreteDecorator1(Component _component) {
+	        super(_component);
+	    }
+	
+	    private void method1() {
+	        System.out.println("method1 修饰");
+	    }
+	
+	    @Override
+	    public void operate() {
+	        this.method1();
+	        super.operate();
+	    }
+	}
+	
+	public class ConcreteDecorator2 extends Decorator {
+	
+	    public ConcreteDecorator2(Component _component) {
+	        super(_component);
+	    }
+	
+	    private void method2() {
+	        System.out.println("method2 修饰");
+	    }
+	
+	    public void operate() {
+	        super.operate();
+	        this.method2();
+	    }
+	}
+	
+	public  class Decorator extends Component {
+	    private Component component = null;
+	    // 通过构造函数传递构件（被装饰者）
+	    public Decorator(Component _component) {
+	        this.component = _component;
+	    }
+	
+	    // 委托给构件（被装饰者）执行
+	    @Override
+	    public void operate() {
+	        this.component.operate();
+	    }
+	}
+	
+	public class Client {
+	
+	    public static void main(String[] args) {
+	        Component component = new ConcreteComponent();
+	        component = new ConcreteDecorator1(component);  // 第一次修饰
+	        component = new ConcreteDecorator2(component);  // 第二次修饰
+	        component.operate();
+	    }
+	}
+
+测试结果：  
+method1 修饰  
+do Something  
+method2 修饰  
+
+***
+
+以上代码与类图取于《设计模式之禅》，被ConcreteDecorator1装饰过了component可以继续被ConcreteDecorator2装饰。  
+
+java自带的类库中java.io就使用了设计模式。  
+
+![](http://wx3.sinaimg.cn/large/b17a6fd6gy1fjoxknqtwjj20sg0e6juj.jpg)
+
+FileInputStream中read()是按字节读取，jdk源码中给的注释是：  
+> Reads a byte of data from this input stream. This method blocks if no input is yet available.  
+
+BufferInputStream修饰了FileInputStream中的read()。BufferInputStream中的read()源码如下：  
+
+	public synchronized int read() throws IOException {
+        if (pos >= count) {
+            fill();
+            if (pos >= count)
+                return -1;
+        }
+        return getBufIfOpen()[pos++] & 0xff;
+    }
+
+大致功能是将数据按字节先读入缓冲区，然后一次性的返回。缓冲区可以减少磁盘读取次数。  
+
+java.io类图中有3个Component, 4个ConcreteDecorator。 这4个具体的装饰者类，都可以装饰Component， 如果使用继承，那么会有3*4个子类， 类的数量太多。  
+装饰器模式是继承关系的一个替换方案。Decorator, 不管装饰多少层，返回的对象还是Component, 实现的还是is-a的关系。  
