@@ -109,3 +109,8 @@ BufferInputStream修饰了FileInputStream中的read()。BufferInputStream中的r
 
 java.io类图中有3个Component, 4个ConcreteDecorator。 这4个具体的装饰者类，都可以装饰Component， 如果使用继承，那么会有3*4个子类， 类的数量太多。  
 装饰器模式是继承关系的一个替换方案。Decorator, 不管装饰多少层，返回的对象还是Component, 实现的还是is-a的关系。  
+
+
+#### 装饰器模式的缺点
+
+多层的装饰比较复杂，如果最里面的一层出了问题，需要剥开很多层，才能发现并修改。
