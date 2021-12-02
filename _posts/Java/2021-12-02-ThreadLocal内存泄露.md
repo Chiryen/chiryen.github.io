@@ -15,7 +15,7 @@ ThreadLocal内存泄漏的根源是：由于ThreadLocalMap的生命周期跟Thre
 
 也就是说，在请求数足够大的情况下，如果线程里的threadLocal变量没有remove，那么value会一直存在于线程的ThreadLocalMap里。特别是针对线程池的情况，核心线程不会被销毁。
 
-![image-20211119185609059](/Users/chenyu/Library/Application Support/typora-user-images/image-20211119185609059.png)
+![image-20211119185609059](https://github.com/Chiryen/chiryen.github.io/blob/master/img/threadlocal内存泄露.jpg)
 
 
 
